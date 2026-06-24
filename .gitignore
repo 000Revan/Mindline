@@ -1,0 +1,21 @@
+.env
+
+.agents/
+
+/backend/.idea/
+/backend/.venv/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+# 虚拟环境
+.venv/
+venv/
+# 日志、本地配置
+*.log
+.env
+# IDE 缓存
+.idea/
+.vscode/
