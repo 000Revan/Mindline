@@ -3,7 +3,7 @@ from typing import Any, Optional
 
 from database.models.Base import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, JSON, String, TEXT, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, JSON, String, TEXT, text
 
 
 class AgentRun(Base):
@@ -37,9 +37,9 @@ class AgentRun(Base):
     output_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True, comment="输出参数")
     resume_payload: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True, comment="恢复执行参数")
     error_message: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True, comment="错误信息")
-    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, comment="开始时间")
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False, comment="开始时间")
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, comment="结束时间")
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, comment="创建时间")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False, comment="创建时间")
 
     user: Mapped["User"] = relationship(back_populates="agent_runs")
     session: Mapped[Optional["Session"]] = relationship(back_populates="agent_runs")

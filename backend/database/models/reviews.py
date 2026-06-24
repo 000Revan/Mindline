@@ -3,7 +3,7 @@ from datetime import datetime
 
 from database.models.Base import Base, TimestampMixin
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, TEXT, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, TEXT, UniqueConstraint, text
 from typing import Optional
 
 
@@ -88,7 +88,7 @@ class EmotionLog(Base):
     )
     follow_up_needed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否需要后续跟进")
     is_sensitive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="是否敏感")
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, comment="创建时间")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False, comment="创建时间")
 
     user: Mapped["User"] = relationship(back_populates="emotion_logs")
     session: Mapped[Optional["Session"]] = relationship(back_populates="emotion_logs")

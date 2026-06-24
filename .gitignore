@@ -1,21 +1,46 @@
+﻿# Environment variables
 .env
+.env.*
+!.env.example
 
+# Local agent/config state
 .agents/
 
-/backend/.idea/
-/backend/.venv/
-
-# Python 缓存
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-# 虚拟环境
+# Python virtual environments
 .venv/
 venv/
-# 日志、本地配置
-*.log
-.env
-# IDE 缓存
+env/
+backend/.venv/
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Alembic cache only. Keep alembic.ini, env.py, and versions/*.py tracked.
+alembic/**/__pycache__/
+alembic/**/*.py[cod]
+backend/alembic/**/__pycache__/
+backend/alembic/**/*.py[cod]
+
+# IDE and editor files
 .idea/
 .vscode/
+backend/.idea/
+
+# Logs and runtime files
+*.log
+logs/
+*.pid
+
+# OS generated files
+.DS_Store
+Thumbs.db

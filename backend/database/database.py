@@ -18,4 +18,8 @@ AsyncSessionFactory=async_sessionmaker(
 
 async def get_db():
     async with AsyncSessionFactory() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise

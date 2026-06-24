@@ -5,7 +5,7 @@ from sqlalchemy.dialects.mysql import LONGTEXT
 
 from database.models.Base import Base, TimestampMixin
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, text
 
 
 class Session(Base, TimestampMixin):
@@ -67,7 +67,7 @@ class Message(Base):
         comment="消息类型",
     )
     metadata_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True, comment="元数据")
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, comment="创建时间")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False, comment="创建时间")
 
     session: Mapped["Session"] = relationship(back_populates="messages")
     user: Mapped["User"] = relationship(back_populates="messages")
