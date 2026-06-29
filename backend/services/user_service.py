@@ -7,7 +7,7 @@ from utils.auth import create_access_token
 from utils.security import get_hash_password,verify_password
 from sqlalchemy.exc import IntegrityError
 
-
+#用户注册
 async def register(db: AsyncSession, user_data:UserRequest):
     try:
         # 验证用户是否存在
@@ -53,7 +53,7 @@ async def register(db: AsyncSession, user_data:UserRequest):
         await db.rollback()
         raise
 
-
+#用户登录
 async def login(db:AsyncSession, user_data:UserRequest):
     user = await users.get_user_by_username(db, user_data.username)
     if not user:
@@ -78,7 +78,7 @@ async def login(db:AsyncSession, user_data:UserRequest):
         user=UserInfoResponse.model_validate(user)
     )
 
-
+#修改用户信息
 async def update_user_info(db:AsyncSession, user_id, user_data):
     try:
         update_data=user_data.model_dump(
@@ -115,7 +115,7 @@ async def update_user_info(db:AsyncSession, user_id, user_data):
         await db.rollback()
         raise
 
-
+#修改用户密码
 async def update_password(db: AsyncSession, user_id: int, password_data: UserChangePasswordRequest):
     try:
         user=await users.get_user_by_id(db, user_id)

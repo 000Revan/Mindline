@@ -1,10 +1,6 @@
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.functions import user
-
 from database.models import User
-from schemas.users import UserUpdateRequest
-from utils.security import get_hash_password
 
 
 # 根据用户名查询数据库

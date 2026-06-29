@@ -9,6 +9,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "fastapi>=0.138.0",
     "passlib[argon2]>=1.7.4",
+    "python-multipart>=0.0.20",
     "pyjwt>=2.13.0",
     "sqlalchemy[asyncio]>=2.0.51",
     "uvicorn>=0.49.0",

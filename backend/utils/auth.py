@@ -13,10 +13,12 @@ from database.crud import users
 from database.database import get_db
 from schemas.users import  UserInfoResponse
 
+from config.config import config
+
 # 密钥
-SECRET_KEY = "65c748a670a40a228bce5efe6c29d199d046aa1793e8fe6147ac4aca490cdebd"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+SECRET_KEY = config.secret_key
+ALGORITHM = config.algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = config.access_token_expire_minutes
 
 
 # 生成Token

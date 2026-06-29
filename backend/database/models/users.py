@@ -1,6 +1,6 @@
 from typing import Any, Optional
 
-from sqlalchemy import Enum, ForeignKey, Index, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import Enum, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.models.Base import Base, TimestampMixin
@@ -19,7 +19,7 @@ class User(Base, TimestampMixin):
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, comment="用户名")
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False, comment="密码哈希")
     nickname: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, comment="昵称")
-    avatar_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="头像URL")
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True, comment="头像URL")
     gender: Mapped[Optional[str]] = mapped_column(
         Enum("male", "female", "unknown", name="user_gender"),
         default="unknown",
@@ -60,12 +60,18 @@ class UserProfile(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("user_id", name="uq_user_profiles_user_id"),
         Index("ix_user_profiles_user_id", "user_id"),
+        CheckConstraint(
+            "anxiety_level IS NULL OR anxiety_level BETWEEN 1 AND 5",
+            name="ck_user_profiles_anxiety_level_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="用户画像ID")
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, comment="用户ID")
     target_direction: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, comment="学习目标方向")
     anxiety_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="焦虑等级(1-5)")
+    learning_level: Mapped[Optional[str]] = mapped_column(Enum("beginner","entry","advanced"),name="profile_learning_level", nullable=True, comment="学习水平：beginner=初学，entry=入门，advanced=进阶")
+    support_style: Mapped[Optional[str]] = mapped_column(Enum("gentle", "direct", "coach", "warm_logic"), name="profile_support_style",nullable=True, comment="情绪陪伴风格")
     preference_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True, comment="偏好JSON")
 
     user: Mapped["User"] = relationship(back_populates="profile")
