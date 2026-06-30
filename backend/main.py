@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from routers import users
+from routers import users, learning
 
 app = FastAPI()
 BASE_DIR = Path(__file__).resolve().parent
@@ -27,6 +27,7 @@ app.add_middleware(
 
 # 挂载路由
 app.include_router(users.router)
+app.include_router(learning.router)
 
 @app.get("/")
 async def root():
