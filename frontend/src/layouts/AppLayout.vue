@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { authApi, resolveApiAssetUrl } from '@/api/client'
 import { useMindlineStore } from '@/stores/mindline'
 
 const route = useRoute()
+const router = useRouter()
 const store = useMindlineStore()
 
 const navItems = [
@@ -35,6 +36,7 @@ const activeUserPanel = ref<'account' | 'portrait'>('account')
 const avatarInputRef = ref<HTMLInputElement | null>(null)
 const profileSaving = ref(false)
 const passwordSaving = ref(false)
+const avatarUploading = ref(false)
 
 const profileForm = reactive({
   nickname: '',
@@ -50,6 +52,13 @@ const portraitDraft = ref(
   localStorage.getItem('mindline_user_portrait') ||
     '这里记录用户的学习偏好、目标方向、情绪支持方式和长期成长画像。后端接口完成后可替换为真实个人画像数据。',
 )
+
+const allowedAvatarTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+const maxAvatarSize = 2 * 1024 * 1024
+
+onMounted(() => {
+  void Promise.allSettled([store.refreshCurrentUser(), store.fetchActiveGoal()])
+})
 
 function getGenderLabel(gender?: string | null) {
   if (gender === 'male') return '男'
@@ -77,6 +86,7 @@ function openChangePasswordDialog() {
 }
 
 function triggerAvatarUpload() {
+  if (avatarUploading.value) return
   avatarInputRef.value?.click()
 }
 
@@ -85,21 +95,28 @@ async function handleAvatarUpload(event: Event) {
   const file = input.files?.[0]
   if (!file) return
 
-  if (!file.type.startsWith('image/')) {
-    ElMessage.warning('请选择图片文件')
+  if (!allowedAvatarTypes.has(file.type)) {
+    ElMessage.warning('头像仅支持 jpg、png、webp、gif 格式')
     input.value = ''
     return
   }
 
+  if (file.size > maxAvatarSize) {
+    ElMessage.warning('头像文件不能超过 2MB')
+    input.value = ''
+    return
+  }
+
+  avatarUploading.value = true
   try {
     const updatedUser = await authApi.uploadAvatar(file)
-    store.user = updatedUser
-    localStorage.setItem('mindline_user', JSON.stringify(updatedUser))
+    store.setUser(updatedUser)
     localStorage.removeItem('mindline_avatar_data_url')
     ElMessage.success('头像已更新')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '头像更新失败')
   } finally {
+    avatarUploading.value = false
     input.value = ''
   }
 }
@@ -112,8 +129,7 @@ async function saveProfile() {
       gender: profileForm.gender,
       bio: profileForm.bio,
     })
-    store.user = updatedUser
-    localStorage.setItem('mindline_user', JSON.stringify(updatedUser))
+    store.setUser(updatedUser)
     editProfileVisible.value = false
     ElMessage.success('个人信息已更新')
   } catch (error) {
@@ -144,7 +160,9 @@ async function savePassword() {
     passwordForm.old_password = ''
     passwordForm.new_password = ''
     passwordForm.confirm_password = ''
-    ElMessage.success('密码已修改')
+    store.clearAuthSession()
+    await router.replace({ name: 'auth', query: { reason: 'password_changed' } })
+    ElMessage.success('密码已修改，请使用新密码重新登录')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '密码修改失败')
   } finally {
@@ -199,7 +217,7 @@ function savePortrait() {
       <header class="topbar">
         <div>
           <p class="topbar-label">当前主线</p>
-          <h1>{{ store.activeGoal?.title }}</h1>
+          <h1>{{ store.activeGoal?.title || '暂未设置当前主线' }}</h1>
         </div>
         <div class="toolbar-row">
           <el-tag type="primary" effect="light">Agent 在线</el-tag>
@@ -293,6 +311,7 @@ function savePortrait() {
                 class="avatar-edit-button"
                 type="button"
                 aria-label="修改头像"
+                :disabled="avatarUploading"
                 @click="triggerAvatarUpload"
               >
                 <el-icon><EditPen /></el-icon>
@@ -301,7 +320,7 @@ function savePortrait() {
                 ref="avatarInputRef"
                 class="avatar-input"
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/gif"
                 @change="handleAvatarUpload"
               />
             </div>
@@ -581,6 +600,11 @@ function savePortrait() {
   background: #ffffff;
   box-shadow: 0 6px 16px rgba(66, 104, 214, 0.18);
   cursor: pointer;
+}
+
+.avatar-edit-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .avatar-input {

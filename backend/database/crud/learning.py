@@ -1,10 +1,11 @@
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import LearningGoal
-from schemas.learning import LearningGoalCreateRequest
+from database.models import LearningGoal, User
+from schemas.learning import LearningGoalCreateRequest, LearningGoalUpdateRequest
+
 
 # 创建学习目标
 async def create_learning_goal(
@@ -48,7 +49,7 @@ async def get_learning_goals_page(
     # 目标列表
     list_query=(
         select(LearningGoal)
-        .where(LearningGoal.user_id==user_id)
+        .where(*filters)
         .order_by(
             LearningGoal.priority.desc(),
             LearningGoal.created_at.desc(),
@@ -61,5 +62,91 @@ async def get_learning_goals_page(
     goals=list(list_result.scalars().all())
     return  goals,total
 
+#根据学习目标id查找
+async def get_learning_goal_by_id(db:AsyncSession, goal_id:int,user_id:int):
+    query=(
+        select(LearningGoal)
+        .where(LearningGoal.id==goal_id,LearningGoal.user_id==user_id)
+    )
+    result=await db.execute(query)
+    return result.scalar_one_or_none()
+
+#修改学习目标信息
+async def update_learning_goal(
+    db: AsyncSession,
+    goal: LearningGoal,
+    update_data: dict,
+):
+    for field, value in update_data.items():
+        setattr(goal, field, value)
+
+    await db.flush()
+    return goal
 
 
+async def lock_user_for_update(db: AsyncSession, user_id: int):
+    """锁定用户记录，串行执行该用户的目标激活操作。"""
+
+    query = (
+        select(User.id)
+        .where(User.id == user_id)
+        .with_for_update()
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def get_learning_goal_for_update(
+    db: AsyncSession,
+    user_id: int,
+    goal_id: int,
+):
+    """查询并锁定需要激活的学习目标。"""
+
+    query = (
+        select(LearningGoal)
+        .where(
+            LearningGoal.id == goal_id,
+            LearningGoal.user_id == user_id,
+        )
+        .with_for_update()
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def pause_other_active_goals(
+    db: AsyncSession,
+    user_id: int,
+    exclude_goal_id: int,
+) -> int:
+    """暂停当前用户除指定目标外的其他活跃目标。"""
+
+    query = (
+        update(LearningGoal)
+        .where(
+            LearningGoal.user_id == user_id,
+            LearningGoal.status == "active",
+            LearningGoal.id != exclude_goal_id,
+        )
+        .values(status="paused")
+    )
+    result = await db.execute(query)
+    return result.rowcount
+
+
+async def update_learning_goal_status(
+    db: AsyncSession,
+    user_id: int,
+    goal_id: int,
+    goal_status: str,
+):
+    query = (
+        update(LearningGoal)
+        .where(
+            LearningGoal.id == goal_id,
+            LearningGoal.user_id == user_id,
+        )
+        .values(status=goal_status)
+    )
+    return await db.execute(query)

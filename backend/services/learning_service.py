@@ -1,9 +1,12 @@
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette import status
 
 from database.crud import learning
-from schemas.learning import LearningGoalResponse, LearningGoalCreateRequest, LearningGoalsPageResponse
+from schemas.learning import LearningGoalResponse, LearningGoalCreateRequest, LearningGoalsPageResponse, \
+    LearningGoalUpdateRequest, LearningGoalStatusResponse
 
 
 # 创建学习目标
@@ -50,4 +53,127 @@ async def get_learning_goals_page(
         page=page,
         page_size=page_size,
         total_pages=total_pages,
+    )
+
+# 修改学习目标信息
+async def update_learning_goal(
+        db: AsyncSession,
+        user_id: int,
+        goal_id: int,
+        update_data: LearningGoalUpdateRequest
+):
+    try:
+        goal=await learning.get_learning_goal_by_id(db=db, goal_id=goal_id, user_id=user_id)
+        if not goal:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="学习目标不存在"
+            )
+        if goal.status in {"completed", "archived"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="无法修改已完成或已归档的学习目标"
+            )
+
+        data=update_data.model_dump(
+            exclude_none=True
+        )
+        if not data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="没有需要修改的字段"
+            )
+
+        start_date=data.get("start_date", goal.start_date)
+        target_date=data.get("target_date", goal.target_date)
+
+        if start_date and target_date and start_date >= target_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="目标完成时间必须晚于开始时间"
+            )
+
+        goal=await learning.update_learning_goal(
+            db=db,
+            goal=goal,
+            update_data=data
+        )
+        result=LearningGoalResponse.model_validate(goal)
+        await db.commit()
+        return  result
+    except Exception:
+        await db.rollback()
+        raise
+
+# 修改学习目标状态
+async def update_learning_goal_status(
+    db: AsyncSession,
+    user_id: int,
+    goal_id: int,
+    goal_status: str,
+) -> LearningGoalStatusResponse:
+    """更新学习目标状态，并保证每个用户最多只有一个活跃目标。"""
+
+    try:
+        locked_user_id = await learning.lock_user_for_update(db, user_id)
+        if locked_user_id is None:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        goal = await learning.get_learning_goal_for_update(
+            db=db,
+            user_id=user_id,
+            goal_id=goal_id,
+        )
+        if goal is None:
+            raise HTTPException(status_code=404, detail="学习目标不存在")
+
+        if goal.status in {"completed", "archived"} and goal.status != goal_status:
+            raise HTTPException(
+                status_code=400,
+                detail="已完成或已归档的学习目标不能恢复或修改状态",
+            )
+
+        paused_count = 0
+        if goal_status == "active":
+            paused_count = await learning.pause_other_active_goals(
+                db=db,
+                user_id=user_id,
+                exclude_goal_id=goal_id,
+            )
+
+        if goal.status != goal_status:
+            await learning.update_learning_goal_status(
+                db=db,
+                user_id=user_id,
+                goal_id=goal_id,
+                goal_status=goal_status,
+            )
+
+        await db.refresh(goal)
+
+        result = LearningGoalStatusResponse(
+            goal=LearningGoalResponse.model_validate(goal),
+            paused_goal_count=paused_count,
+        )
+
+        await db.commit()
+        return result
+
+    except Exception:
+        await db.rollback()
+        raise
+
+
+async def activate_learning_goal(
+    db: AsyncSession,
+    user_id: int,
+    goal_id: int,
+) -> LearningGoalStatusResponse:
+    """兼容原有激活接口，复用统一状态流转逻辑。"""
+
+    return await update_learning_goal_status(
+        db=db,
+        user_id=user_id,
+        goal_id=goal_id,
+        goal_status="active",
     )

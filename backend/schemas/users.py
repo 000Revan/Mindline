@@ -10,7 +10,6 @@ class UserRequest(BaseModel):
 
 class UserUpdateRequest(BaseModel):
     nickname:Optional[str]=Field(None,title="昵称")
-    avatar_url:Optional[str]=Field(None,title="头像URL")
     gender:Optional[str]=Field(default="unknown",title="性别")
     bio:Optional[str]=Field(None,title="个人简介")
 

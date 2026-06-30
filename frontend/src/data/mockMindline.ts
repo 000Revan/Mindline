@@ -29,6 +29,7 @@ export const mockGoals: LearningGoal[] = [
     priority: 1,
     currentStage: 'MVP 业务接口与前端体验整合',
     currentPrinciple: '今天只推进最小闭环，分支先停车。',
+    startDate: '2026-06-01',
     targetDate: '2026-07-20',
   },
   {
@@ -40,6 +41,7 @@ export const mockGoals: LearningGoal[] = [
     priority: 2,
     currentStage: '等待笔记接口补齐',
     currentPrinciple: '先保存原始事实，再做 AI 优化。',
+    startDate: null,
     targetDate: '2026-08-01',
   },
 ]

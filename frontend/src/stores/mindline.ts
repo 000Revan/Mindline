@@ -1,11 +1,16 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
+  authApi,
+  learningApi,
+  type LearningGoalCreatePayload,
+  type LearningGoalUpdatePayload,
+} from '@/api/client'
+import {
   mockAgentRuns,
   mockBranches,
   mockConversations,
   mockEmotionLogs,
-  mockGoals,
   mockKnowledgePoints,
   mockNotes,
   mockReviews,
@@ -13,7 +18,13 @@ import {
   mockTasks,
   mockUser,
 } from '@/data/mockMindline'
-import type { ChatMessage, ConversationSession, UserProfile } from '@/types/mindline'
+import type {
+  ChatMessage,
+  ConversationSession,
+  LearningGoal,
+  LearningGoalStatus,
+  UserProfile,
+} from '@/types/mindline'
 
 function readStoredUser(): UserProfile | null {
   const rawUser = localStorage.getItem('mindline_user')
@@ -29,7 +40,15 @@ function readStoredUser(): UserProfile | null {
 
 export const useMindlineStore = defineStore('mindline', () => {
   const user = ref<UserProfile>(readStoredUser() ?? mockUser)
-  const goals = ref(mockGoals)
+  const goals = ref<LearningGoal[]>([])
+  const activeGoal = ref<LearningGoal>()
+  const goalsLoading = ref(false)
+  const goalsError = ref('')
+  const goalPage = ref(1)
+  const goalPageSize = ref(10)
+  const goalTotal = ref(0)
+  const goalTotalPages = ref(0)
+  const goalStatusFilter = ref<LearningGoalStatus | ''>('')
   const tasks = ref(mockTasks)
   const learningSessions = ref(mockSessions)
   const branches = ref(mockBranches)
@@ -41,7 +60,6 @@ export const useMindlineStore = defineStore('mindline', () => {
   const agentRuns = ref(mockAgentRuns)
   const activeConversationId = ref(conversations.value[0]?.id ?? 0)
 
-  const activeGoal = computed(() => goals.value.find((goal) => goal.status === 'active'))
   const activeConversation = computed(() =>
     conversations.value.find((session) => session.id === activeConversationId.value),
   )
@@ -52,6 +70,100 @@ export const useMindlineStore = defineStore('mindline', () => {
   const completedTaskCount = computed(
     () => tasks.value.filter((task) => task.status === 'completed').length,
   )
+
+  function setUser(nextUser: UserProfile) {
+    user.value = nextUser
+    localStorage.setItem('mindline_user', JSON.stringify(nextUser))
+  }
+
+  function clearAuthSession() {
+    localStorage.removeItem('mindline_token')
+    localStorage.removeItem('mindline_user')
+    localStorage.removeItem('mindline_avatar_data_url')
+
+    user.value = { username: '' }
+    goals.value = []
+    activeGoal.value = undefined
+    goalsError.value = ''
+    goalPage.value = 1
+    goalTotal.value = 0
+    goalTotalPages.value = 0
+    goalStatusFilter.value = ''
+  }
+
+  async function refreshCurrentUser() {
+    const nextUser = await authApi.info()
+    setUser(nextUser)
+    return nextUser
+  }
+
+  async function fetchGoals(
+    page = goalPage.value,
+    status: LearningGoalStatus | '' = goalStatusFilter.value,
+  ) {
+    goalsLoading.value = true
+    goalsError.value = ''
+    try {
+      const result = await learningApi.listGoals({
+        page,
+        pageSize: goalPageSize.value,
+        status: status || undefined,
+      })
+      goals.value = result.items
+      goalPage.value = result.page
+      goalTotal.value = result.total
+      goalTotalPages.value = result.totalPages
+      goalStatusFilter.value = status
+      return result
+    } catch (error) {
+      goalsError.value = error instanceof Error ? error.message : '学习目标加载失败'
+      throw error
+    } finally {
+      goalsLoading.value = false
+    }
+  }
+
+  async function fetchActiveGoal() {
+    const result = await learningApi.listGoals({ page: 1, pageSize: 1, status: 'active' })
+    activeGoal.value = result.items[0]
+    return activeGoal.value
+  }
+
+  async function createGoal(payload: LearningGoalCreatePayload) {
+    const createdGoal = await learningApi.createGoal(payload)
+    await fetchGoals(1, goalStatusFilter.value)
+    return createdGoal
+  }
+
+  async function updateGoal(goalId: number, payload: LearningGoalUpdatePayload) {
+    const updatedGoal = await learningApi.updateGoal(goalId, payload)
+    const index = goals.value.findIndex((goal) => goal.id === goalId)
+    if (index >= 0) goals.value[index] = updatedGoal
+    if (activeGoal.value?.id === goalId) activeGoal.value = updatedGoal
+    return updatedGoal
+  }
+
+  async function changeGoalStatus(goalId: number, status: Exclude<LearningGoalStatus, 'pending'>) {
+    const result = await learningApi.updateGoalStatus(goalId, status)
+
+    if (status === 'active') {
+      activeGoal.value = result.goal
+      goals.value = goals.value.map((goal) => {
+        if (goal.id === goalId) return result.goal
+        return goal.status === 'active' ? { ...goal, status: 'paused' } : goal
+      })
+    } else {
+      if (activeGoal.value?.id === goalId) activeGoal.value = undefined
+      const index = goals.value.findIndex((goal) => goal.id === goalId)
+      if (index >= 0) goals.value[index] = result.goal
+    }
+
+    await Promise.allSettled([
+      fetchGoals(goalPage.value, goalStatusFilter.value),
+      fetchActiveGoal(),
+    ])
+    return result
+  }
 
   function selectConversation(id: number) {
     activeConversationId.value = id
@@ -111,6 +223,13 @@ export const useMindlineStore = defineStore('mindline', () => {
   return {
     user,
     goals,
+    goalsLoading,
+    goalsError,
+    goalPage,
+    goalPageSize,
+    goalTotal,
+    goalTotalPages,
+    goalStatusFilter,
     tasks,
     learningSessions,
     branches,
@@ -126,6 +245,14 @@ export const useMindlineStore = defineStore('mindline', () => {
     todayTasks,
     pendingBranches,
     completedTaskCount,
+    setUser,
+    clearAuthSession,
+    refreshCurrentUser,
+    fetchGoals,
+    fetchActiveGoal,
+    createGoal,
+    updateGoal,
+    changeGoalStatus,
     selectConversation,
     createConversation,
     deleteConversation,

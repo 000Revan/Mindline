@@ -31,6 +31,19 @@ async def update_user(db: AsyncSession, user_id: int, user_data: dict):
     result=await db.execute(query)
     return result
 
+#更新头像
+async def update_user_avatar(
+        db:AsyncSession,
+        user_id: int,
+        avatar_url: str
+):
+    query=(
+        update(User)
+        .where(User.id == user_id)
+        .values(avatar_url=avatar_url)
+    )
+    return await db.execute(query)
+
 
 # 修改密码
 async def update_password(db: AsyncSession,user_id, password_hash: str):

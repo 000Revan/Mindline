@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi } from '@/api/client'
+import { useMindlineStore } from '@/stores/mindline'
 
 const mode = ref<'login' | 'register'>('login')
 const loading = ref(false)
@@ -9,10 +10,16 @@ const message = ref('')
 const messageType = ref<'success' | 'warning' | 'info' | 'error'>('info')
 const route = useRoute()
 const router = useRouter()
+const store = useMindlineStore()
 const form = reactive({
   username: '',
   password: '',
 })
+
+if (route.query.reason === 'password_changed') {
+  messageType.value = 'success'
+  message.value = '密码修改成功，请使用新密码重新登录'
+}
 
 async function submitAuth() {
   message.value = ''
@@ -33,7 +40,7 @@ async function submitAuth() {
         : await authApi.register({ username, password })
 
     localStorage.setItem('mindline_token', result.token)
-    localStorage.setItem('mindline_user', JSON.stringify(result.user))
+    store.setUser(result.user)
     messageType.value = 'success'
     message.value = mode.value === 'login' ? '登录成功，正在进入工作台' : '注册成功，正在进入工作台'
     await router.push((route.query.redirect as string | undefined) ?? '/dashboard')

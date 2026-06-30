@@ -1,4 +1,5 @@
 export type StatusTone = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+export type LearningGoalStatus = 'active' | 'pending' | 'paused' | 'completed' | 'archived'
 
 export interface UserProfile {
   id?: number
@@ -16,11 +17,12 @@ export interface LearningGoal {
   title: string
   description: string
   direction: string
-  status: 'active' | 'pending' | 'paused' | 'completed' | 'archived'
+  status: LearningGoalStatus
   priority: number
   currentStage: string
   currentPrinciple: string
-  targetDate: string
+  startDate: string | null
+  targetDate: string | null
 }
 
 export interface DailyTask {
