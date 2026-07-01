@@ -9,6 +9,15 @@ from schemas.learning import LearningGoalResponse, LearningGoalCreateRequest, Le
     LearningGoalUpdateRequest, LearningGoalStatusResponse
 
 
+LEARNING_GOAL_STATUS_TRANSITIONS = {
+    "pending": {"active"},
+    "active": {"paused", "completed"},
+    "paused": {"active", "completed"},
+    "completed": set(),
+    "archived": set(),
+}
+
+
 # 创建学习目标
 async def create_learning_goal(
         db: AsyncSession,
@@ -54,6 +63,16 @@ async def get_learning_goals_page(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+async def get_learning_goal_by_id(
+        db:AsyncSession,
+        goal_id:int,
+        user_id:int,
+):
+    result=await learning.get_learning_goal_by_id(db=db, goal_id=goal_id, user_id=user_id)
+    return LearningGoalResponse.model_validate(result)
+
 
 # 修改学习目标信息
 async def update_learning_goal(
@@ -127,10 +146,11 @@ async def update_learning_goal_status(
         if goal is None:
             raise HTTPException(status_code=404, detail="学习目标不存在")
 
-        if goal.status in {"completed", "archived"} and goal.status != goal_status:
+        allowed_statuses = LEARNING_GOAL_STATUS_TRANSITIONS[goal.status]
+        if goal.status != goal_status and goal_status not in allowed_statuses:
             raise HTTPException(
                 status_code=400,
-                detail="已完成或已归档的学习目标不能恢复或修改状态",
+                detail=f"学习目标不能从 {goal.status} 状态变更为 {goal_status} 状态",
             )
 
         paused_count = 0
@@ -164,16 +184,51 @@ async def update_learning_goal_status(
         raise
 
 
-async def activate_learning_goal(
+
+
+async def archive_learning_goal(
     db: AsyncSession,
     user_id: int,
     goal_id: int,
-) -> LearningGoalStatusResponse:
-    """兼容原有激活接口，复用统一状态流转逻辑。"""
+) -> LearningGoalResponse:
+    """删除学习目标。"""
 
-    return await update_learning_goal_status(
-        db=db,
-        user_id=user_id,
-        goal_id=goal_id,
-        goal_status="active",
-    )
+    try:
+        locked_user_id = await learning.lock_user_for_update(db, user_id)
+        if locked_user_id is None:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        goal = await learning.get_learning_goal_for_update(
+            db=db,
+            goal_id=goal_id,
+            user_id=user_id,
+        )
+        if goal is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="学习目标不存在",
+            )
+        if goal.status == "archived":
+            result = LearningGoalResponse.model_validate(goal)
+            await db.commit()
+            return result
+        # 归档学习目标
+        await learning.archive_learning_goal(
+            db=db,
+            user_id=user_id,
+            goal_id=goal_id,
+        )
+        # 取消未完成任务
+        # await learning.cancel_unfinished_tasks_by_goal(
+        #     db=db,
+        #     user_id=user_id,
+        #     goal_id=goal_id,
+        # )
+        await db.refresh(goal)
+        result = LearningGoalResponse.model_validate(goal)
+        await db.commit()
+        return result
+    except Exception:
+        await db.rollback()
+        raise
+

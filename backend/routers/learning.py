@@ -61,6 +61,23 @@ async def get_learning_goals_list(
         data=result
     )
 
+#获取学习目标详情
+@router.get("/goals/{goal_id}")
+async def get_learning_goal_detail(
+        goal_id:int,
+        user:User=Depends(get_current_user),
+        db:AsyncSession=Depends(get_db)
+):
+    result=await learning_service.get_learning_goal_by_id(
+        db=db,
+        goal_id=goal_id,
+        user_id=user.id
+    )
+    return success_response(
+        msg="获取学习目标详情成功",
+        data=result
+    )
+
 
 #修改学习目标普通信息
 @router.patch("/goals/{goal_id}")
@@ -84,23 +101,6 @@ async def update_learning_goal(
 
 
 #修改学习目标状态
-@router.patch("/goals/{goal_id}/activate")
-async def activate_learning_goal(
-    goal_id: int,
-    user: UserInfoResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await learning_service.activate_learning_goal(
-        db=db,
-        user_id=user.id,
-        goal_id=goal_id,
-    )
-    return success_response(
-        msg="学习目标已激活",
-        data=result,
-    )
-
-
 @router.patch("/goals/{goal_id}/status")
 async def update_learning_goal_status(
     goal_id: int,
@@ -121,5 +121,24 @@ async def update_learning_goal_status(
         data=result,
     )
 
+
+
+@router.delete("/goals/{goal_id}")
+async def archive_learning_goal(
+    goal_id: int,
+    user: UserInfoResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除学习目标。"""
+
+    result = await learning_service.archive_learning_goal(
+        db=db,
+        user_id=user.id,
+        goal_id=goal_id,
+    )
+    return success_response(
+        msg="删除学习目标成功",
+        data=result
+    )
 
 #创建今日学习任务

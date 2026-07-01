@@ -55,7 +55,6 @@ class LearningGoalStatusRequest(BaseModel):
         "active",
         "paused",
         "completed",
-        "archived",
     ]
 
 class LearningGoalStatusResponse(BaseModel):
@@ -63,8 +62,6 @@ class LearningGoalStatusResponse(BaseModel):
     paused_goal_count: int
 
 
-class LearningGoalActivateResponse(LearningGoalStatusResponse):
-    """兼容原有激活接口的响应结构。"""
 
 # 学习目标列表响应
 class LearningGoalsPageResponse(BaseModel):

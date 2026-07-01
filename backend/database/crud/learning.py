@@ -4,7 +4,7 @@ from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import LearningGoal, User
-from schemas.learning import LearningGoalCreateRequest, LearningGoalUpdateRequest
+from schemas.learning import LearningGoalCreateRequest
 
 
 # 创建学习目标
@@ -35,6 +35,8 @@ async def get_learning_goals_page(
 
     if status is not None:
         filters.append(LearningGoal.status==status)
+    else:
+        filters.append(LearningGoal.status != "archived")
 
     count_query=(
         select(func.count(LearningGoal.id))
@@ -134,7 +136,7 @@ async def pause_other_active_goals(
     result = await db.execute(query)
     return result.rowcount
 
-
+#修改目标状态
 async def update_learning_goal_status(
     db: AsyncSession,
     user_id: int,
@@ -150,3 +152,36 @@ async def update_learning_goal_status(
         .values(status=goal_status)
     )
     return await db.execute(query)
+
+#归档目标
+async def archive_learning_goal(
+    db: AsyncSession,
+    user_id: int,
+    goal_id: int,
+):
+    query = (
+        update(LearningGoal)
+        .where(
+            LearningGoal.id == goal_id,
+            LearningGoal.user_id == user_id,
+        )
+        .values(status="archived")
+    )
+    return await db.execute(query)
+
+#取消未完成每日任务
+# async def cancel_unfinished_tasks_by_goal(
+#     db: AsyncSession,
+#     user_id: int,
+#     goal_id: int,
+# ):
+#     query = (
+#         update(DailyTask)
+#         .where(
+#             DailyTask.user_id == user_id,
+#             DailyTask.goal_id == goal_id,
+#             DailyTask.status.in_(["pending", "in_progress"]),
+#         )
+#         .values(status="cancelled")
+#     )
+#     return await db.execute(query)

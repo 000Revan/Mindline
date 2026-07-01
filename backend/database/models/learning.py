@@ -1,9 +1,8 @@
-from datetime import datetime
-
+from datetime import datetime, date
 
 from database.models.Base import Base, TimestampMixin
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, TEXT, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, TEXT, func, Date, CheckConstraint
 from typing import Optional
 
 
@@ -46,13 +45,18 @@ class DailyTask(Base, TimestampMixin):
     __tablename__ = "daily_tasks"
 
     __table_args__ = (
-        Index("ix_daily_tasks_user_status", "user_id", "status"),
-        Index("ix_daily_tasks_goal_status", "goal_id", "status"),
+        Index("ix_daily_tasks_user_status", "user_id", "task_date","status"),
+        Index("ix_daily_tasks_goal_status", "goal_id", "task_date"),
+    )
+
+    CheckConstraint(
+        "estimated_time IS NULL OR estimated_time BETWEEN 1 AND 1440",
+        name="daily_tasks_estimated_time_range",
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="任务ID")
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, comment="用户ID")
-    goal_id: Mapped[int] = mapped_column(Integer, ForeignKey("learning_goals.id"), nullable=False, comment="所属学习目标ID")
+    goal_id: Mapped[int] = mapped_column(Integer, ForeignKey("learning_goals.id"), nullable=False,index=True, comment="所属学习目标ID")
     title: Mapped[str] = mapped_column(String(255), nullable=False, comment="任务标题")
     description: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True, comment="任务描述")
     task_type: Mapped[str] = mapped_column(
@@ -68,6 +72,11 @@ class DailyTask(Base, TimestampMixin):
         comment="任务状态",
     )
     estimated_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="预计耗时(分钟)")
+    task_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        comment="计划执行日期",
+    )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, comment="完成时间")
 
     user: Mapped["User"] = relationship(back_populates="daily_tasks")
