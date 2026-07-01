@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi, resolveApiAssetUrl } from '@/api/client'
 import { useMindlineStore } from '@/stores/mindline'
@@ -37,6 +37,7 @@ const avatarInputRef = ref<HTMLInputElement | null>(null)
 const profileSaving = ref(false)
 const passwordSaving = ref(false)
 const avatarUploading = ref(false)
+const loggingOut = ref(false)
 
 const profileForm = reactive({
   nickname: '',
@@ -174,6 +175,30 @@ function savePortrait() {
   localStorage.setItem('mindline_user_portrait', portraitDraft.value)
   ElMessage.success('个人画像模板已保存到本地')
 }
+
+async function logout() {
+  try {
+    await ElMessageBox.confirm('退出后需要重新登录才能继续使用 Mindline。', '确认退出登录', {
+      confirmButtonText: '退出登录',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+
+  loggingOut.value = true
+  try {
+    userDialogVisible.value = false
+    editProfileVisible.value = false
+    changePasswordVisible.value = false
+    store.clearAuthSession()
+    await router.replace({ name: 'auth', query: { reason: 'logout' } })
+    ElMessage.success('已退出登录')
+  } finally {
+    loggingOut.value = false
+  }
+}
 </script>
 
 <template>
@@ -194,23 +219,36 @@ function savePortrait() {
         </el-menu-item>
       </el-menu>
 
-      <section
-        class="user-profile"
-        aria-label="用户信息"
-        role="button"
-        tabindex="0"
-        @click="openUserDialog"
-        @keydown.enter="openUserDialog"
-        @keydown.space.prevent="openUserDialog"
-      >
-        <el-avatar :size="42" :src="userAvatarUrl" class="user-avatar">
-          {{ userAvatarInitial }}
-        </el-avatar>
-        <div class="user-meta">
-          <p>当前用户</p>
-          <strong>{{ userDisplayName }}</strong>
-        </div>
-      </section>
+      <div class="user-footer">
+        <section
+          class="user-profile"
+          aria-label="查看个人信息"
+          role="button"
+          tabindex="0"
+          @click="openUserDialog"
+          @keydown.enter="openUserDialog"
+          @keydown.space.prevent="openUserDialog"
+        >
+          <el-avatar :size="42" :src="userAvatarUrl" class="user-avatar">
+            {{ userAvatarInitial }}
+          </el-avatar>
+          <div class="user-meta">
+            <p>当前用户</p>
+            <strong>{{ userDisplayName }}</strong>
+          </div>
+        </section>
+        <el-tooltip content="退出登录" placement="top">
+          <el-button
+            class="logout-button"
+            circle
+            aria-label="退出登录"
+            :loading="loggingOut"
+            @click="logout"
+          >
+            <el-icon><SwitchButton /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
     </aside>
 
     <main class="main-area">
@@ -487,18 +525,37 @@ function savePortrait() {
   background: var(--ml-primary-soft);
 }
 
-.user-profile {
+.user-footer {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-top: auto;
-  padding: 16px;
+  padding-top: 12px;
   border-top: 1px solid var(--ml-line);
+}
+
+.user-profile {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--ml-radius);
   cursor: pointer;
 }
 
-.user-profile:hover {
+.user-profile:hover,
+.user-profile:focus-visible {
+  outline: none;
   background: rgba(240, 245, 255, 0.72);
+}
+
+.logout-button {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  color: var(--ml-danger);
 }
 
 .user-avatar,

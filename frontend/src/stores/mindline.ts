@@ -23,6 +23,7 @@ import type {
   ConversationSession,
   LearningGoal,
   LearningGoalStatus,
+  LearningGoalStatusAction,
   UserProfile,
 } from '@/types/mindline'
 
@@ -80,6 +81,7 @@ export const useMindlineStore = defineStore('mindline', () => {
     localStorage.removeItem('mindline_token')
     localStorage.removeItem('mindline_user')
     localStorage.removeItem('mindline_avatar_data_url')
+    localStorage.removeItem('mindline_user_portrait')
 
     user.value = { username: '' }
     goals.value = []
@@ -143,7 +145,7 @@ export const useMindlineStore = defineStore('mindline', () => {
     return updatedGoal
   }
 
-  async function changeGoalStatus(goalId: number, status: Exclude<LearningGoalStatus, 'pending'>) {
+  async function changeGoalStatus(goalId: number, status: LearningGoalStatusAction) {
     const result = await learningApi.updateGoalStatus(goalId, status)
 
     if (status === 'active') {
@@ -163,6 +165,24 @@ export const useMindlineStore = defineStore('mindline', () => {
       fetchActiveGoal(),
     ])
     return result
+  }
+
+  async function archiveGoal(goalId: number) {
+    const archivedGoal = await learningApi.archiveGoal(goalId)
+    if (activeGoal.value?.id === goalId) activeGoal.value = undefined
+
+    const [goalsResult] = await Promise.allSettled([
+      fetchGoals(goalPage.value, goalStatusFilter.value),
+      fetchActiveGoal(),
+    ])
+    if (
+      goalsResult.status === 'fulfilled' &&
+      goalsResult.value.items.length === 0 &&
+      goalsResult.value.page > 1
+    ) {
+      await fetchGoals(goalsResult.value.page - 1, goalStatusFilter.value)
+    }
+    return archivedGoal
   }
 
   function selectConversation(id: number) {
@@ -253,6 +273,7 @@ export const useMindlineStore = defineStore('mindline', () => {
     createGoal,
     updateGoal,
     changeGoalStatus,
+    archiveGoal,
     selectConversation,
     createConversation,
     deleteConversation,

@@ -1,4 +1,4 @@
-import type { LearningGoal, LearningGoalStatus } from '@/types/mindline'
+import type { LearningGoal, LearningGoalStatus, LearningGoalStatusAction } from '@/types/mindline'
 
 export interface ApiResponse<T> {
   code: number
@@ -286,7 +286,7 @@ export const learningApi = {
   },
   async updateGoalStatus(
     goalId: number,
-    status: Exclude<LearningGoalStatus, 'pending'>,
+    status: LearningGoalStatusAction,
   ): Promise<LearningGoalStatusResult> {
     const result = await request<LearningGoalStatusResultWire>(
       `/api/learning/goals/${goalId}/status`,
@@ -299,6 +299,12 @@ export const learningApi = {
       goal: mapLearningGoal(result.goal),
       pausedGoalCount: result.paused_goal_count,
     }
+  },
+  async archiveGoal(goalId: number): Promise<LearningGoal> {
+    const goal = await request<LearningGoalWire>(`/api/learning/goals/${goalId}`, {
+      method: 'DELETE',
+    })
+    return mapLearningGoal(goal)
   },
 }
 

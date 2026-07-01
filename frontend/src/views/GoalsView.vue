@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import type { LearningGoalCreatePayload, LearningGoalUpdatePayload } from '@/api/client'
 import { useMindlineStore } from '@/stores/mindline'
-import type { LearningGoal, LearningGoalStatus } from '@/types/mindline'
+import type { LearningGoal, LearningGoalStatus, LearningGoalStatusAction } from '@/types/mindline'
 
 const store = useMindlineStore()
 const statusOptions: Array<{ label: string; value: LearningGoalStatus | '' }> = [
@@ -34,7 +34,8 @@ const detailDialogVisible = ref(false)
 const createFormRef = ref<FormInstance>()
 const creating = ref(false)
 const detailSaving = ref(false)
-const statusChanging = ref<Exclude<LearningGoalStatus, 'pending'> | ''>('')
+const archiving = ref(false)
+const statusChanging = ref<LearningGoalStatusAction | ''>('')
 const selectedGoal = ref<LearningGoal>()
 const createForm = reactive({
   title: '',
@@ -57,9 +58,18 @@ const createRules: FormRules = {
   title: [{ required: true, message: '请输入学习目标标题', trigger: 'blur' }],
   direction: [{ required: true, message: '请输入学习方向', trigger: 'blur' }],
 }
-const isTerminalGoal = computed(
-  () => selectedGoal.value?.status === 'completed' || selectedGoal.value?.status === 'archived',
+const canEditGoal = computed(() =>
+  selectedGoal.value ? ['pending', 'active', 'paused'].includes(selectedGoal.value.status) : false,
 )
+const canActivateGoal = computed(
+  () => selectedGoal.value?.status === 'pending' || selectedGoal.value?.status === 'paused',
+)
+const canPauseGoal = computed(() => selectedGoal.value?.status === 'active')
+const canCompleteGoal = computed(
+  () => selectedGoal.value?.status === 'active' || selectedGoal.value?.status === 'paused',
+)
+const canArchiveGoal = computed(() => Boolean(selectedGoal.value?.status !== 'archived'))
+const actionPending = computed(() => Boolean(statusChanging.value) || archiving.value)
 
 function optionalText(value: string) {
   return value.trim() || undefined
@@ -110,7 +120,7 @@ function openGoalDetail(goal: LearningGoal) {
 
 async function loadGoals(page = store.goalPage) {
   try {
-    await store.fetchGoals(page, store.goalStatusFilter)
+    await Promise.all([store.fetchGoals(page, store.goalStatusFilter), store.fetchActiveGoal()])
   } catch {
     // 页面错误区已经提供重试入口。
   }
@@ -159,20 +169,27 @@ async function submitCreate() {
 
 async function saveGoalDetail() {
   const goal = selectedGoal.value
-  if (!goal || isTerminalGoal.value) return
+  if (!goal || !canEditGoal.value) return
   if (!validateDateRange(detailForm.startDate, detailForm.targetDate)) return
 
-  const payload: LearningGoalUpdatePayload = { priority: detailForm.priority }
-  const optionalFields = {
-    start_date: detailForm.startDate || undefined,
-    target_date: detailForm.targetDate || undefined,
-    current_stage: optionalText(detailForm.currentStage),
-    current_principle: optionalText(detailForm.currentPrinciple),
+  const payload: LearningGoalUpdatePayload = {}
+  if (detailForm.priority !== goal.priority) payload.priority = detailForm.priority
+  if (detailForm.startDate && detailForm.startDate !== goal.startDate) {
+    payload.start_date = detailForm.startDate
   }
-  Object.assign(
-    payload,
-    Object.fromEntries(Object.entries(optionalFields).filter(([, value]) => value)),
-  )
+  if (detailForm.targetDate && detailForm.targetDate !== goal.targetDate) {
+    payload.target_date = detailForm.targetDate
+  }
+  const currentStage = optionalText(detailForm.currentStage)
+  if (currentStage && currentStage !== goal.currentStage) payload.current_stage = currentStage
+  const currentPrinciple = optionalText(detailForm.currentPrinciple)
+  if (currentPrinciple && currentPrinciple !== goal.currentPrinciple) {
+    payload.current_principle = currentPrinciple
+  }
+  if (!Object.keys(payload).length) {
+    ElMessage.info('学习目标信息没有变化')
+    return
+  }
 
   detailSaving.value = true
   try {
@@ -186,17 +203,15 @@ async function saveGoalDetail() {
   }
 }
 
-async function confirmStatusChange(status: Exclude<LearningGoalStatus, 'pending'>) {
+async function confirmStatusChange(status: LearningGoalStatusAction) {
   const goal = selectedGoal.value
-  if (!goal || isTerminalGoal.value) return
+  if (!goal || !canEditGoal.value) return
 
   let confirmation = ''
   if (status === 'active' && store.activeGoal && store.activeGoal.id !== goal.id) {
     confirmation = `设为当前主线后，“${store.activeGoal.title}”将自动暂停。`
   } else if (status === 'completed') {
     confirmation = '标记完成后将无法继续编辑或恢复该学习目标。'
-  } else if (status === 'archived') {
-    confirmation = '归档后将无法继续编辑或恢复该学习目标。'
   }
   if (confirmation) {
     try {
@@ -225,6 +240,38 @@ async function confirmStatusChange(status: Exclude<LearningGoalStatus, 'pending'
   }
 }
 
+async function confirmArchiveGoal() {
+  const goal = selectedGoal.value
+  if (!goal || !canArchiveGoal.value) return
+
+  try {
+    await ElMessageBox.confirm(
+      `归档“${goal.title}”后将无法继续编辑或恢复，但学习历史会被保留。`,
+      '确认归档学习目标',
+      {
+        confirmButtonText: '确认归档',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  archiving.value = true
+  try {
+    await store.archiveGoal(goal.id)
+    detailDialogVisible.value = false
+    selectedGoal.value = undefined
+    ElMessage.success('学习目标已归档')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '学习目标归档失败')
+    await loadGoals(store.goalPage)
+  } finally {
+    archiving.value = false
+  }
+}
+
 onMounted(() => void loadGoals(1))
 </script>
 
@@ -240,6 +287,17 @@ onMounted(() => void loadGoals(1))
         ><el-icon><Plus /></el-icon>新建主线</el-button
       >
     </div>
+
+    <section v-if="store.activeGoal" class="active-goal-strip" aria-label="当前学习主线">
+      <div>
+        <el-tag type="success" effect="dark">当前主线</el-tag>
+        <div class="active-goal-copy">
+          <strong>{{ store.activeGoal.title }}</strong>
+          <span>{{ store.activeGoal.currentStage || '当前阶段未设置' }}</span>
+        </div>
+      </div>
+      <el-button plain @click="openGoalDetail(store.activeGoal)">查看详情</el-button>
+    </section>
 
     <div class="goal-filter-row">
       <el-select
@@ -272,7 +330,12 @@ onMounted(() => void loadGoals(1))
       >
     </el-result>
     <el-empty v-else-if="!store.goals.length" description="当前筛选条件下暂无学习目标">
-      <el-button type="primary" @click="openCreateDialog">新建主线</el-button>
+      <el-button
+        v-if="store.goalStatusFilter !== 'archived'"
+        type="primary"
+        @click="openCreateDialog"
+        >新建主线</el-button
+      >
     </el-empty>
     <div v-else class="soft-list">
       <article
@@ -390,13 +453,17 @@ onMounted(() => void loadGoals(1))
           </div>
         </dl>
         <el-alert
-          v-if="isTerminalGoal"
-          title="已完成或已归档的学习目标不可继续编辑和恢复"
+          v-if="selectedGoal.status === 'completed' || selectedGoal.status === 'archived'"
+          :title="
+            selectedGoal.status === 'archived'
+              ? '已归档的学习目标仅供查看'
+              : '已完成的学习目标不可继续编辑或恢复，但仍可归档'
+          "
           type="info"
           :closable="false"
           show-icon
         />
-        <el-form label-position="top" :disabled="isTerminalGoal" class="detail-form">
+        <el-form label-position="top" :disabled="!canEditGoal" class="detail-form">
           <div class="goal-form-grid">
             <el-form-item label="优先级"
               ><el-input-number v-model="detailForm.priority" :min="1" :max="5"
@@ -424,37 +491,40 @@ onMounted(() => void loadGoals(1))
             /></el-form-item>
           </div>
         </el-form>
-        <div v-if="!isTerminalGoal" class="goal-status-actions">
+        <div v-if="selectedGoal.status !== 'archived'" class="goal-status-actions">
           <el-button
-            v-if="selectedGoal.status !== 'active'"
+            v-if="canActivateGoal"
             type="primary"
             plain
             :loading="statusChanging === 'active'"
-            :disabled="Boolean(statusChanging)"
+            :disabled="actionPending"
             @click="confirmStatusChange('active')"
             >设为当前主线</el-button
           >
           <el-button
-            v-else
+            v-if="canPauseGoal"
             type="warning"
             plain
             :loading="statusChanging === 'paused'"
-            :disabled="Boolean(statusChanging)"
+            :disabled="actionPending"
             @click="confirmStatusChange('paused')"
             >暂停主线</el-button
           >
           <el-button
+            v-if="canCompleteGoal"
             plain
             :loading="statusChanging === 'completed'"
-            :disabled="Boolean(statusChanging)"
+            :disabled="actionPending"
             @click="confirmStatusChange('completed')"
             >标记完成</el-button
           >
           <el-button
+            v-if="canArchiveGoal"
+            type="danger"
             plain
-            :loading="statusChanging === 'archived'"
-            :disabled="Boolean(statusChanging)"
-            @click="confirmStatusChange('archived')"
+            :loading="archiving"
+            :disabled="actionPending"
+            @click="confirmArchiveGoal"
             >归档</el-button
           >
         </div>
@@ -462,10 +532,10 @@ onMounted(() => void loadGoals(1))
       <template #footer>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
         <el-button
-          v-if="!isTerminalGoal"
+          v-if="canEditGoal"
           type="primary"
           :loading="detailSaving"
-          :disabled="Boolean(statusChanging)"
+          :disabled="actionPending"
           @click="saveGoalDetail"
           >保存修改</el-button
         >
@@ -475,6 +545,38 @@ onMounted(() => void loadGoals(1))
 </template>
 
 <style scoped>
+.active-goal-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--ml-line);
+  border-left: 4px solid var(--el-color-success);
+  border-radius: var(--ml-radius);
+  background: var(--ml-surface);
+}
+.active-goal-strip > div {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+}
+.active-goal-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.active-goal-copy strong,
+.active-goal-copy span {
+  overflow-wrap: anywhere;
+}
+.active-goal-copy span {
+  color: var(--ml-muted);
+  font-size: 13px;
+}
 .goal-filter-row {
   display: flex;
   align-items: center;
@@ -574,7 +676,7 @@ onMounted(() => void loadGoals(1))
   border-top: 1px solid var(--ml-line);
 }
 .goal-status-actions :deep(.el-button) {
-  min-height: 40px;
+  min-height: 44px;
   margin-left: 0;
 }
 @media (max-width: 860px) {
@@ -591,6 +693,11 @@ onMounted(() => void loadGoals(1))
   }
 }
 @media (max-width: 560px) {
+  .active-goal-strip,
+  .active-goal-strip > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .goal-filter-row {
     align-items: stretch;
     flex-direction: column;

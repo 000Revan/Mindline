@@ -1,5 +1,6 @@
 export type StatusTone = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 export type LearningGoalStatus = 'active' | 'pending' | 'paused' | 'completed' | 'archived'
+export type LearningGoalStatusAction = 'active' | 'paused' | 'completed'
 
 export interface UserProfile {
   id?: number
