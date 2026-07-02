@@ -1,9 +1,10 @@
+from datetime import date
 from typing import Optional
 
-from sqlalchemy import select, func, update
+from sqlalchemy import case, select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import LearningGoal, User
+from database.models import DailyTask, LearningGoal, User
 from schemas.learning import LearningGoalCreateRequest
 
 
@@ -169,19 +170,128 @@ async def archive_learning_goal(
     )
     return await db.execute(query)
 
-#取消未完成每日任务
-# async def cancel_unfinished_tasks_by_goal(
-#     db: AsyncSession,
-#     user_id: int,
-#     goal_id: int,
-# ):
-#     query = (
-#         update(DailyTask)
-#         .where(
-#             DailyTask.user_id == user_id,
-#             DailyTask.goal_id == goal_id,
-#             DailyTask.status.in_(["pending", "in_progress"]),
-#         )
-#         .values(status="cancelled")
-#     )
-#     return await db.execute(query)
+
+async def create_daily_task(
+    db: AsyncSession,
+    user_id: int,
+    task_data: dict,
+) -> DailyTask:
+    """创建每日学习任务并刷新主键，不在 CRUD 层提交事务。"""
+
+    task = DailyTask(user_id=user_id, status="pending", **task_data)
+    db.add(task)
+    await db.flush()
+    return task
+
+
+async def get_daily_task_by_id(
+    db: AsyncSession,
+    user_id: int,
+    task_id: int,
+) -> Optional[DailyTask]:
+    """按用户和任务 ID 查询每日学习任务。"""
+
+    query = select(DailyTask).where(
+        DailyTask.id == task_id,
+        DailyTask.user_id == user_id,
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def get_daily_task_for_update(
+    db: AsyncSession,
+    user_id: int,
+    task_id: int,
+) -> Optional[DailyTask]:
+    """查询并锁定每日学习任务，避免并发状态更新互相覆盖。"""
+
+    query = (
+        select(DailyTask)
+        .where(
+            DailyTask.id == task_id,
+            DailyTask.user_id == user_id,
+        )
+        .with_for_update()
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def get_daily_tasks_page(
+    db: AsyncSession,
+    user_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    task_date: Optional[date] = None,
+    goal_id: Optional[int] = None,
+    task_status: Optional[str] = None,
+) -> tuple[list[DailyTask], int]:
+    """按日期、目标和状态分页查询当前用户的每日学习任务。"""
+
+    filters = [DailyTask.user_id == user_id]
+    if task_date is not None:
+        filters.append(DailyTask.task_date == task_date)
+    if goal_id is not None:
+        filters.append(DailyTask.goal_id == goal_id)
+    if task_status is not None:
+        filters.append(DailyTask.status == task_status)
+
+    total_result = await db.execute(
+        select(func.count(DailyTask.id)).where(*filters)
+    )
+    total = total_result.scalar_one()
+
+    status_order = case(
+        (DailyTask.status == "in_progress", 1),
+        (DailyTask.status == "pending", 2),
+        (DailyTask.status == "completed", 3),
+        else_=4,
+    )
+    query = (
+        select(DailyTask)
+        .where(*filters)
+        .order_by(
+            DailyTask.task_date.asc(),
+            status_order.asc(),
+            DailyTask.created_at.asc(),
+            DailyTask.id.asc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all()), total
+
+
+async def update_daily_task(
+    db: AsyncSession,
+    task: DailyTask,
+    update_data: dict,
+) -> DailyTask:
+    """更新每日学习任务字段，不在 CRUD 层处理业务状态机。"""
+
+    for field, value in update_data.items():
+        setattr(task, field, value)
+    await db.flush()
+    return task
+
+
+async def cancel_unfinished_tasks_by_goal(
+    db: AsyncSession,
+    user_id: int,
+    goal_id: int,
+) -> int:
+    """取消指定目标下尚未完成的任务。"""
+
+    query = (
+        update(DailyTask)
+        .where(
+            DailyTask.user_id == user_id,
+            DailyTask.goal_id == goal_id,
+            DailyTask.status.in_(["pending", "in_progress"]),
+        )
+        .values(status="cancelled", completed_at=None)
+    )
+    result = await db.execute(query)
+    return result.rowcount

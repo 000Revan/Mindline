@@ -33,7 +33,7 @@ const store = useMindlineStore()
     <div class="metric-grid">
       <div class="metric-card">
         <p class="metric-label">今日任务</p>
-        <p class="metric-value">{{ store.todayTasks.length }}</p>
+        <p class="metric-value">{{ store.taskTotal }}</p>
       </div>
       <div class="metric-card">
         <p class="metric-label">待回收分支</p>
@@ -64,7 +64,15 @@ const store = useMindlineStore()
               <p class="soft-item-desc">{{ task.description }}</p>
             </div>
             <div class="task-meta">
-              <el-tag :type="task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'primary' : 'warning'">
+              <el-tag
+                :type="
+                  task.status === 'completed'
+                    ? 'success'
+                    : task.status === 'in_progress'
+                      ? 'primary'
+                      : 'warning'
+                "
+              >
                 {{ task.status }}
               </el-tag>
               <span>{{ task.estimatedTime }} 分钟</span>

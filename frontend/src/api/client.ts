@@ -1,4 +1,11 @@
-import type { LearningGoal, LearningGoalStatus, LearningGoalStatusAction } from '@/types/mindline'
+import type {
+  DailyTask,
+  DailyTaskStatus,
+  DailyTaskType,
+  LearningGoal,
+  LearningGoalStatus,
+  LearningGoalStatusAction,
+} from '@/types/mindline'
 
 export interface ApiResponse<T> {
   code: number
@@ -162,6 +169,28 @@ interface LearningGoalStatusResultWire {
   paused_goal_count: number
 }
 
+interface DailyTaskWire {
+  id: number
+  goal_id: number
+  title: string
+  description?: string | null
+  task_type: DailyTaskType
+  status: DailyTaskStatus
+  estimated_time?: number | null
+  task_date: string
+  completed_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface DailyTasksPageWire {
+  items: DailyTaskWire[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
 export interface LearningGoalCreatePayload {
   title: string
   description?: string
@@ -200,6 +229,40 @@ export interface LearningGoalStatusResult {
   pausedGoalCount: number
 }
 
+export interface DailyTaskCreatePayload {
+  goal_id: number
+  title: string
+  description?: string | null
+  task_type: DailyTaskType
+  estimated_time?: number | null
+  task_date: string
+}
+
+export interface DailyTaskUpdatePayload {
+  goal_id?: number
+  title?: string
+  description?: string | null
+  task_type?: DailyTaskType
+  estimated_time?: number | null
+  task_date?: string
+}
+
+export interface DailyTasksQuery {
+  taskDate?: string
+  goalId?: number
+  status?: DailyTaskStatus
+  page?: number
+  pageSize?: number
+}
+
+export interface DailyTasksPage {
+  items: DailyTask[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
 function mapLearningGoal(goal: LearningGoalWire): LearningGoal {
   return {
     id: goal.id,
@@ -212,6 +275,22 @@ function mapLearningGoal(goal: LearningGoalWire): LearningGoal {
     targetDate: goal.target_date ?? null,
     currentStage: goal.current_stage ?? '',
     currentPrinciple: goal.current_principle ?? '',
+  }
+}
+
+function mapDailyTask(task: DailyTaskWire): DailyTask {
+  return {
+    id: task.id,
+    goalId: task.goal_id,
+    title: task.title,
+    description: task.description ?? '',
+    taskType: task.task_type,
+    status: task.status,
+    estimatedTime: task.estimated_time ?? null,
+    taskDate: task.task_date,
+    completedAt: task.completed_at ?? null,
+    createdAt: task.created_at,
+    updatedAt: task.updated_at,
   }
 }
 
@@ -306,10 +385,48 @@ export const learningApi = {
     })
     return mapLearningGoal(goal)
   },
+  async listDailyTasks(query: DailyTasksQuery = {}): Promise<DailyTasksPage> {
+    const params = new URLSearchParams({
+      page: String(query.page ?? 1),
+      page_size: String(query.pageSize ?? 10),
+    })
+    if (query.taskDate) params.set('task_date', query.taskDate)
+    if (query.goalId) params.set('goal_id', String(query.goalId))
+    if (query.status) params.set('status', query.status)
+
+    const result = await request<DailyTasksPageWire>(`/api/learning/daily-tasks?${params}`)
+    return {
+      items: result.items.map(mapDailyTask),
+      total: result.total,
+      page: result.page,
+      pageSize: result.page_size,
+      totalPages: result.total_pages,
+    }
+  },
+  async createDailyTask(payload: DailyTaskCreatePayload): Promise<DailyTask> {
+    const task = await request<DailyTaskWire>('/api/learning/daily-tasks', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    return mapDailyTask(task)
+  },
+  async updateDailyTask(taskId: number, payload: DailyTaskUpdatePayload): Promise<DailyTask> {
+    const task = await request<DailyTaskWire>(`/api/learning/daily-tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+    return mapDailyTask(task)
+  },
+  async updateDailyTaskStatus(taskId: number, status: DailyTaskStatus): Promise<DailyTask> {
+    const task = await request<DailyTaskWire>(`/api/learning/daily-tasks/${taskId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    })
+    return mapDailyTask(task)
+  },
 }
 
 export const plannedApi = {
-  dailyTasks: '/daily-tasks',
   learningSessions: '/learning-sessions',
   branchTopics: '/branch-topics',
   notes: '/notes',

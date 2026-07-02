@@ -1,6 +1,8 @@
 export type StatusTone = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 export type LearningGoalStatus = 'active' | 'pending' | 'paused' | 'completed' | 'archived'
 export type LearningGoalStatusAction = 'active' | 'paused' | 'completed'
+export type DailyTaskType = 'study' | 'review' | 'branch' | 'reflection'
+export type DailyTaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
 
 export interface UserProfile {
   id?: number
@@ -31,10 +33,13 @@ export interface DailyTask {
   goalId: number
   title: string
   description: string
-  taskType: 'study' | 'review' | 'branch' | 'reflection'
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
-  estimatedTime: number
-  completedAt?: string
+  taskType: DailyTaskType
+  status: DailyTaskStatus
+  estimatedTime: number | null
+  taskDate: string
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface LearningSession {

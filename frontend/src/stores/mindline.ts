@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 import {
   authApi,
   learningApi,
+  type DailyTaskCreatePayload,
+  type DailyTaskUpdatePayload,
   type LearningGoalCreatePayload,
   type LearningGoalUpdatePayload,
 } from '@/api/client'
@@ -15,17 +17,25 @@ import {
   mockNotes,
   mockReviews,
   mockSessions,
-  mockTasks,
   mockUser,
 } from '@/data/mockMindline'
 import type {
   ChatMessage,
   ConversationSession,
+  DailyTask,
+  DailyTaskStatus,
   LearningGoal,
   LearningGoalStatus,
   LearningGoalStatusAction,
   UserProfile,
 } from '@/types/mindline'
+
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 function readStoredUser(): UserProfile | null {
   const rawUser = localStorage.getItem('mindline_user')
@@ -50,7 +60,15 @@ export const useMindlineStore = defineStore('mindline', () => {
   const goalTotal = ref(0)
   const goalTotalPages = ref(0)
   const goalStatusFilter = ref<LearningGoalStatus | ''>('')
-  const tasks = ref(mockTasks)
+  const tasks = ref<DailyTask[]>([])
+  const tasksLoading = ref(false)
+  const tasksError = ref('')
+  const taskDate = ref(getLocalDateString())
+  const taskStatusFilter = ref<DailyTaskStatus | ''>('')
+  const taskPage = ref(1)
+  const taskPageSize = ref(10)
+  const taskTotal = ref(0)
+  const taskTotalPages = ref(0)
   const learningSessions = ref(mockSessions)
   const branches = ref(mockBranches)
   const notes = ref(mockNotes)
@@ -91,6 +109,13 @@ export const useMindlineStore = defineStore('mindline', () => {
     goalTotal.value = 0
     goalTotalPages.value = 0
     goalStatusFilter.value = ''
+    tasks.value = []
+    tasksError.value = ''
+    taskDate.value = getLocalDateString()
+    taskStatusFilter.value = ''
+    taskPage.value = 1
+    taskTotal.value = 0
+    taskTotalPages.value = 0
   }
 
   async function refreshCurrentUser() {
@@ -185,6 +210,56 @@ export const useMindlineStore = defineStore('mindline', () => {
     return archivedGoal
   }
 
+  async function fetchDailyTasks(
+    page = taskPage.value,
+    date = taskDate.value,
+    status: DailyTaskStatus | '' = taskStatusFilter.value,
+  ) {
+    tasksLoading.value = true
+    tasksError.value = ''
+    try {
+      const result = await learningApi.listDailyTasks({
+        page,
+        pageSize: taskPageSize.value,
+        taskDate: date,
+        status: status || undefined,
+      })
+      tasks.value = result.items
+      taskDate.value = date
+      taskStatusFilter.value = status
+      taskPage.value = result.page
+      taskTotal.value = result.total
+      taskTotalPages.value = result.totalPages
+      return result
+    } catch (error) {
+      tasksError.value = error instanceof Error ? error.message : '每日学习任务加载失败'
+      throw error
+    } finally {
+      tasksLoading.value = false
+    }
+  }
+
+  async function createDailyTask(payload: DailyTaskCreatePayload) {
+    const createdTask = await learningApi.createDailyTask(payload)
+    await fetchDailyTasks(1, taskDate.value, taskStatusFilter.value)
+    return createdTask
+  }
+
+  async function updateDailyTask(taskId: number, payload: DailyTaskUpdatePayload) {
+    const updatedTask = await learningApi.updateDailyTask(taskId, payload)
+    await fetchDailyTasks(taskPage.value, taskDate.value, taskStatusFilter.value)
+    return updatedTask
+  }
+
+  async function changeDailyTaskStatus(taskId: number, status: DailyTaskStatus) {
+    const updatedTask = await learningApi.updateDailyTaskStatus(taskId, status)
+    const result = await fetchDailyTasks(taskPage.value, taskDate.value, taskStatusFilter.value)
+    if (!result.items.length && result.page > 1) {
+      await fetchDailyTasks(result.page - 1, taskDate.value, taskStatusFilter.value)
+    }
+    return updatedTask
+  }
+
   function selectConversation(id: number) {
     activeConversationId.value = id
   }
@@ -251,6 +326,14 @@ export const useMindlineStore = defineStore('mindline', () => {
     goalTotalPages,
     goalStatusFilter,
     tasks,
+    tasksLoading,
+    tasksError,
+    taskDate,
+    taskStatusFilter,
+    taskPage,
+    taskPageSize,
+    taskTotal,
+    taskTotalPages,
     learningSessions,
     branches,
     notes,
@@ -274,6 +357,10 @@ export const useMindlineStore = defineStore('mindline', () => {
     updateGoal,
     changeGoalStatus,
     archiveGoal,
+    fetchDailyTasks,
+    createDailyTask,
+    updateDailyTask,
+    changeDailyTaskStatus,
     selectConversation,
     createConversation,
     deleteConversation,

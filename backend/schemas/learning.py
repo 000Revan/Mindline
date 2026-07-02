@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, Literal
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 
 # 学习目标创建请求
@@ -70,3 +70,119 @@ class LearningGoalsPageResponse(BaseModel):
     page:int
     page_size:int
     total_pages:int
+
+
+DailyTaskType = Literal["study", "review", "branch", "reflection"]
+DailyTaskStatus = Literal["pending", "in_progress", "completed", "cancelled"]
+
+
+class DailyTaskCreateRequest(BaseModel):
+    """每日学习任务创建请求。"""
+
+    goal_id: int = Field(..., gt=0, title="所属学习目标ID")
+    title: str = Field(..., min_length=1, max_length=255, title="任务标题")
+    description: Optional[str] = Field(None, max_length=5000, title="任务描述")
+    task_type: DailyTaskType = Field(default="study", title="任务类型")
+    estimated_time: Optional[int] = Field(None, ge=1, le=1440, title="预计耗时（分钟）")
+    task_date: date = Field(..., title="计划执行日期")
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        """去除标题两侧空白，并拒绝纯空白标题。"""
+
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("任务标题不能为空")
+        return normalized
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: Optional[str]) -> Optional[str]:
+        """将空白描述归一化为空值，避免保存无意义文本。"""
+
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class DailyTaskUpdateRequest(BaseModel):
+    """每日学习任务普通信息修改请求，不负责状态流转。"""
+
+    goal_id: Optional[int] = Field(None, gt=0, title="所属学习目标ID")
+    title: Optional[str] = Field(None, min_length=1, max_length=255, title="任务标题")
+    description: Optional[str] = Field(None, max_length=5000, title="任务描述")
+    task_type: Optional[DailyTaskType] = Field(None, title="任务类型")
+    estimated_time: Optional[int] = Field(None, ge=1, le=1440, title="预计耗时（分钟）")
+    task_date: Optional[date] = Field(None, title="计划执行日期")
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: Optional[str]) -> Optional[str]:
+        """修改标题时拒绝纯空白内容。"""
+
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("任务标题不能为空")
+        return normalized
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: Optional[str]) -> Optional[str]:
+        """将空白描述归一化为空值。"""
+
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_required_fields_are_not_null(self):
+        """非空数据库字段允许缺省，但不允许被显式更新为 null。"""
+
+        required_fields = {"goal_id", "title", "task_type", "task_date"}
+        invalid_fields = [
+            field_name
+            for field_name in required_fields
+            if field_name in self.model_fields_set and getattr(self, field_name) is None
+        ]
+        if invalid_fields:
+            raise ValueError(f"以下字段不能设置为空：{', '.join(sorted(invalid_fields))}")
+        return self
+
+
+class DailyTaskStatusRequest(BaseModel):
+    """每日学习任务状态修改请求。"""
+
+    status: DailyTaskStatus
+
+
+class DailyTaskResponse(BaseModel):
+    """每日学习任务响应。"""
+
+    id: int
+    goal_id: int
+    title: str
+    description: Optional[str]
+    task_type: DailyTaskType
+    status: DailyTaskStatus
+    estimated_time: Optional[int]
+    task_date: date
+    completed_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DailyTasksPageResponse(BaseModel):
+    """每日学习任务分页响应。"""
+
+    items: list[DailyTaskResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

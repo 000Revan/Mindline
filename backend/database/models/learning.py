@@ -47,12 +47,13 @@ class DailyTask(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_daily_tasks_user_status", "user_id", "task_date","status"),
         Index("ix_daily_tasks_goal_status", "goal_id", "task_date"),
+        CheckConstraint(
+            "estimated_time IS NULL OR estimated_time BETWEEN 1 AND 1440",
+            name="daily_tasks_estimated_time_range",
+        )
     )
 
-    CheckConstraint(
-        "estimated_time IS NULL OR estimated_time BETWEEN 1 AND 1440",
-        name="daily_tasks_estimated_time_range",
-    )
+
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="任务ID")
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, comment="用户ID")

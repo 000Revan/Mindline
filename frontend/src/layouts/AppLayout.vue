@@ -58,7 +58,11 @@ const allowedAvatarTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'im
 const maxAvatarSize = 2 * 1024 * 1024
 
 onMounted(() => {
-  void Promise.allSettled([store.refreshCurrentUser(), store.fetchActiveGoal()])
+  void Promise.allSettled([
+    store.refreshCurrentUser(),
+    store.fetchActiveGoal(),
+    store.fetchDailyTasks(1),
+  ])
 })
 
 function getGenderLabel(gender?: string | null) {
@@ -289,9 +293,7 @@ async function logout() {
       <section class="context-card">
         <div class="context-title-row">
           <h2>今日任务</h2>
-          <el-tag type="success"
-            >{{ store.completedTaskCount }}/{{ store.todayTasks.length }}</el-tag
-          >
+          <el-tag type="success">{{ store.completedTaskCount }}/{{ store.taskTotal }}</el-tag>
         </div>
         <div class="mini-list">
           <div v-for="task in store.todayTasks.slice(0, 3)" :key="task.id" class="mini-item">

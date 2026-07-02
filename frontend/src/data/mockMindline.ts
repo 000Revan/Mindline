@@ -2,7 +2,6 @@ import type {
   AgentRun,
   BranchTopic,
   ConversationSession,
-  DailyTask,
   EmotionLog,
   KnowledgePoint,
   LearningGoal,
@@ -43,36 +42,6 @@ export const mockGoals: LearningGoal[] = [
     currentPrinciple: '先保存原始事实，再做 AI 优化。',
     startDate: null,
     targetDate: '2026-08-01',
-  },
-]
-
-export const mockTasks: DailyTask[] = [
-  {
-    id: 1,
-    goalId: 1,
-    title: '梳理学习目标 CRUD 的页面字段',
-    description: '对齐 learning_goals 表，不引入题库语义。',
-    taskType: 'study',
-    status: 'in_progress',
-    estimatedTime: 40,
-  },
-  {
-    id: 2,
-    goalId: 1,
-    title: '记录一次学习 session 摘要',
-    description: '把今天推进内容写成可复盘的学习事实。',
-    taskType: 'review',
-    status: 'pending',
-    estimatedTime: 20,
-  },
-  {
-    id: 3,
-    goalId: 1,
-    title: '回收一个分支问题',
-    description: '限时 10 分钟理解 Chroma metadata 过滤边界。',
-    taskType: 'branch',
-    status: 'pending',
-    estimatedTime: 10,
   },
 ]
 
